@@ -4,11 +4,9 @@ import os
 import subprocess
 import ycm_core
 flags = [
-    '-I/usr/include/gtk-3.0',
-    '-I/home/aaron/tech/lib',
-    '-I/home/aaron/tech/lib/sysprog',
     '-x',
     'c',
+    '-g',
     '-std=c99',
     '-Wall',
     '-Wextra',
