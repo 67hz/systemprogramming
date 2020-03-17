@@ -1,0 +1,5 @@
+**/data
+**/object
+**/bin
+**/tlpi-dist
+**/*.o
