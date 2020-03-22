@@ -43,10 +43,13 @@ main(int argc, char *argv[])
     totRequired += iov[2].iov_len;
 
 
+    /* see man preadv for multithreaded version */
     numRead = readv(fd, iov, 3);
     if (numRead == -1)
         errExit("readv");
 
+    printf("numRead %ld\n", (long)numRead);
+    printf("totRequired %ld\n", (long)totRequired);
     if (numRead < totRequired)
         errExit("Read fewer bytes than requested");
 

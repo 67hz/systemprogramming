@@ -139,3 +139,21 @@ pread and pwrite
 readv and writev for vectorized ops
 -----------------------------------
 
+* also preadv and pwritev
+
+
+See /dev/fd for open file descriptors
+	* symlink to /proc/self/fd
+
+LFS spec
+--------
+
+large files, need to specify 64 bit
+make sure to cast (long long) for fd
+
+
+
+mkstemp() and tmpfile()
+-----------------------
+
+creating temp files
