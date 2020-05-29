@@ -3,3 +3,5 @@
 **/bin
 **/tlpi-dist
 **/*.o
+**/compile_commands.json
+**/.clangd

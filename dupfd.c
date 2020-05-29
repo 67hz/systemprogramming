@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include "lib/tlpi_hdr.h"
+#include "tlpi_hdr.h"
 
 
 #ifndef BUF_SIZE

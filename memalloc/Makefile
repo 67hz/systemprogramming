@@ -1,7 +1,7 @@
 # pass EXEC as var to make
 # EXEC = copy 
 OBJECTS = 
-SYSPROG_DIR = ./lib
+SYSPROG_DIR = ../lib
 BIN_DIR = ./bin
 BUILD_DIR = ./build
 # SRC_FILES are convenience functions for TLPI
@@ -32,3 +32,6 @@ clear-indent-src:
 
 clear-indent-headers:
 	rm *.h~
+
+clean:
+	rm ./bin/*
