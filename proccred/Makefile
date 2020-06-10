@@ -3,13 +3,13 @@
 OBJECTS = 
 SYSPROG_DIR = ../lib
 BIN_DIR = ./bin
-# SRC_FILES = $(SYSPROG_DIR)/*.c ./ugid_functions.c
-SRC_FILES = $(SYSPROG_DIR)/*.c 
+SRC_FILES = $(SYSPROG_DIR)/*.c ../users/ugid_functions.c
+# SRC_FILES = $(SYSPROG_DIR)/*.c
 
 CXX = gcc
 CC = $(CXX)
 
-CFLAGS= -v -g -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR)
+CFLAGS= -g -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR) -I../users
 # LDFLAGS = -L$(SYSPROG_DIR) 
 
 DEBUG_LEVEL = -g

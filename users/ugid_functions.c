@@ -26,7 +26,8 @@ userIdFromName(const char *name)
   if (name == NULL || *name == '\0') /* on NULL or empty string */
     return -1;
 
-  u = strtol(name, &endptr, 10);  /* as a convenience to caller */
+  /* if name is purely numeric string, convert to number and return */
+  u = strtol(name, &endptr, 10);
   if (*endptr == '\0')
     return u;
 
@@ -59,6 +60,7 @@ groupIdFromName(const char *name)
   if (name == NULL || *name == '\0')
     return -1;
 
+  /* as a convenience to caller, allow a numeric string */
   g = strtol(name, &endptr, 10);
   if (*endptr == '\0')
     return g;
