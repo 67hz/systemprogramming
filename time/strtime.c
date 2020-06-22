@@ -1,3 +1,4 @@
+#include <unistd.h>
 #define _DEFAULT_SOURCE
 #include <time.h>
 #include <locale.h>
@@ -18,7 +19,6 @@ main(int argc, char *argv[])
   if (setlocale(LC_ALL, "") == NULL)
     errExit("setlocale");   /* use locale settings in conversions" */
 
-  /* tm = (struct tm){}; */
   memset(&tm, 0, sizeof(struct tm));   /* init tm */
   if (strptime(argv[1], argv[2], &tm) == NULL)
     fatal("strptime");
