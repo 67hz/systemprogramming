@@ -3,13 +3,13 @@
 OBJECTS = 
 SYSPROG_DIR = ../lib
 BIN_DIR = ./bin
-SRC_FILES = $(SYSPROG_DIR)/*.c ./ugid_functions.c
-#SRC_FILES = $(SYSPROG_DIR)/*.c 
+SRC_FILES = $(SYSPROG_DIR)/*.c 
+
 
 CXX = gcc
 CC = $(CXX)
 
-CFLAGS= -ggdb3 -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR)
+CFLAGS= -g -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR) -I../users
 # LDFLAGS = -L$(SYSPROG_DIR) 
 
 DEBUG_LEVEL = -g
@@ -19,7 +19,7 @@ INDENT_FLAGS_KERNEL = -nbad -bap -nbc -bbo -hnl -br -brs -c33 -cd33 \
 -saf -saw -ncs -nsc -sob -nfca -cp33 -ss -ts8 -il1
 
 $(basename $(EXEC)): $(SRC_FILES)
-	$(CC) $(CFLAGS) $(SRC_FILES) $@.c -lcrypt -o $(BIN_DIR)/$@
+	$(CC) $(CFLAGS) $(SRC_FILES) $@.c -o $(BIN_DIR)/$@
 
 
 clean:
