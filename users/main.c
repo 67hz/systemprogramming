@@ -3,21 +3,10 @@
 #include <stdio.h>
 #include <pwd.h>
 #include <string.h>
+#include <limits.h>
 #include "tlpi_hdr.h"
 #include "ugid_functions.h"
 
-
-/*
- * use feof to check if EOF on fp
- * int feof(FILE *stream);
- */
-
-#define MAX_NAME  100
-
-/**
- * this seems overkill. is there a better way to avoid white space
- * in fgets?
- */
 void
 trimTrailingWhiteSpace(char *str)
 {
@@ -39,7 +28,7 @@ int main(int argc, char *argv[])
   char *fetchedName;
   char *groupName;
   char *name;
-  char runName[MAX_NAME];
+  char runName[LINE_MAX];
 
   if (argc < 2) {
     FILE *fpipe;
@@ -50,12 +39,13 @@ int main(int argc, char *argv[])
     if (fpipe == NULL)
       errExit("popen");
 
-    fgets(runName, MAX_NAME, fpipe);
+    fgets(runName, LINE_MAX, fpipe);
 
+    trimTrailingWhiteSpace(runName);
     name = strdup(runName);
-    trimTrailingWhiteSpace(name);
 
     pclose(fpipe);
+
   } else
     name = argv[1];
 
@@ -68,8 +58,8 @@ int main(int argc, char *argv[])
   groupId = groupIdFromName(fetchedName);
   groupName = groupNameFromId(groupId);
 
-  char copiedName[6];
-  memcpy(copiedName, fetchedName, 5);
+  char copiedName[strlen(name)];
+  memcpy(copiedName, fetchedName, strlen(name));
   
   printf("User Id from %s: %d\n", name, userId);
   printf("Fetched name from id: %s\n", copiedName);
@@ -83,7 +73,5 @@ int main(int argc, char *argv[])
 
   endpwent();
 
-
-
-  return 0;
+  exit(EXIT_SUCCESS);
 }
