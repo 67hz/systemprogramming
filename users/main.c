@@ -7,20 +7,6 @@
 #include "tlpi_hdr.h"
 #include "ugid_functions.h"
 
-void
-trimTrailingWhiteSpace(char *str)
-{
-  size_t i = 0;
-  size_t index = -1;
-  while (str[i] != '\0') {
-    if (str[i] != ' ' && str[i] != '\n')
-      index = i;
-
-    i++;
-  }
-  str[index + 1]  = '\0';
-}
-
 int main(int argc, char *argv[])
 {
   uid_t userId;
@@ -41,7 +27,9 @@ int main(int argc, char *argv[])
 
     fgets(runName, LINE_MAX, fpipe);
 
-    trimTrailingWhiteSpace(runName);
+    /* replace NL with null */
+    runName[strlen(runName) - 1] = 0;
+
     name = strdup(runName);
 
     pclose(fpipe);
