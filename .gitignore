@@ -5,3 +5,5 @@
 **/*.o
 **/compile_commands.json
 **/.clangd
+
+**/core

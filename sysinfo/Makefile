@@ -8,11 +8,12 @@ SRC_FILES = $(SYSPROG_DIR)/*.c
 
 CXX = gcc
 CC = $(CXX)
+DEBUG_LEVEL = -ggdb3
 
-CFLAGS= -g -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR) -I../users
+CFLAGS= $(DEBUG_LEVEL) -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR) -I../users
 # LDFLAGS = -L$(SYSPROG_DIR) 
 
-DEBUG_LEVEL = -g
+
 
 INDENT_FLAGS_KERNEL = -nbad -bap -nbc -bbo -hnl -br -brs -c33 -cd33 \
 -ncdb -ce -ci4 -cli0 -d0 -di1 -nfc1 -i8 -ip0 -l80 -lp -npcs -nprs -npsl -sai \
