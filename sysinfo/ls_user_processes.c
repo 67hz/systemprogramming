@@ -1,5 +1,9 @@
 /**
  * List all processes being run by user.
+ * usage:
+ * $ ls_user_processes 
+ *
+ * arg 1 - user name or defaults to `whoami`
  *
  * readdir or nftw for traversal??? - readdir - only 1 level deep in /proc/pid
  * use stat to check for user id of owner???
@@ -19,14 +23,25 @@
 #include <string.h>
 #include <limits.h>
 #include "tlpi_hdr.h"
+#include "ugid_functions.h"
 
+static Boolean
+strStartsWith(const char *restrict str, const char *restrict prefix)
+{
+    while (*prefix) {
+        if (*prefix++ != *str++)
+            return 0;
+    }
+    return 1;
+}
 
 static void
-listFiles(const char *dirpath)
+listFilesByUserId(const char *dirpath, const uid_t userId)
 {
     DIR *dirp;
     struct dirent *dp;
     dirp = opendir(dirpath);
+    char *status = "status";
 
     if (dirp == NULL) {
         errMsg("opendir failed: %s", dirpath);
@@ -54,17 +69,53 @@ listFiles(const char *dirpath)
         /* only want dirs that are numbered && > 0 */
         pid = strtol(dp->d_name, NULL, 10); /* returns 0 if no digits */
         if (pid) {
-            printf("Dir: %s \t #: %d\n", dp->d_name, pid);
+            /* printf("Dir: %s \t #: %d\n", dp->d_name, pid); */
 
-            /* read contents for matching uid */
             FILE *stream;
-            if (!fopen(dp->d_name, "r")) {
-                errMsg("could not open %s", dp->d_name);
+
+            /* allocate absolute pathname buffer, add 1 for '/' */
+            char *fullpath = malloc(strlen(dp->d_name) + strlen(dirpath) + 
+                    strlen(status) + 2);
+            if (fullpath == NULL) {
+                errMsg("coult not get full path");
+                continue;
+            }
+            sprintf(fullpath, "%s/%s/%s", dirpath, dp->d_name, status);
+            stream = fopen(fullpath, "r");
+            if (stream == NULL) {
+                errMsg("could not open %s", fullpath);
                 continue;
             }
 
+            /* read into buffer */
+            char buf[LINE_MAX];
+            char outputBuf[LINE_MAX];
+            char userIdStr[LOGIN_NAME_MAX];
+
+            while (fgets(buf, LINE_MAX, stream))
+            {
+                if (strStartsWith(buf, "Name"))
+                    sprintf(outputBuf, "%s", buf);
+
+                if (strStartsWith(buf, "Uid")) {
+                    sprintf(userIdStr, "%d", userId);
+                    if (strstr(buf, userIdStr)) {
+                        printf("NAME: %s", outputBuf);
+                        printf("UID: %s\n", buf);
+                    }
+                }
+
+            }
 
 
+            if (fclose(stream) != 0) {
+                errMsg("could not close %s", fullpath);
+
+                /* @TODO cleanup fullpath before loop? */
+                continue;
+            }
+
+            free(fullpath);
         }
     }
 
@@ -80,11 +131,18 @@ listFiles(const char *dirpath)
 int main
 (int argc, char *argv[])
 {
+    uid_t userId;
+    char *userName;
     const char *procDir = "/proc";
 
-    listFiles(procDir);
+    /* @TODO use `whoami` if no user provided */
+    if (argc < 2 || (argc > 1 && strcmp(argv[1], "--help") == 0))
+        usageErr("%s username", argv[0]);
 
+    userName = argv[1];
+    userId = userIdFromName(userName);
 
+    listFilesByUserId(procDir, userId);
   
     exit(EXIT_SUCCESS);
 }

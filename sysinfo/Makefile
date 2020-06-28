@@ -2,8 +2,9 @@
 # EXEC = copy 
 OBJECTS = 
 SYSPROG_DIR = ../lib
+USERS_DIR = ../users
 BIN_DIR = ./bin
-SRC_FILES = $(SYSPROG_DIR)/*.c 
+SRC_FILES = $(SYSPROG_DIR)/*.c $(USERS_DIR)/ugid_functions.c
 
 
 CXX = gcc
@@ -20,7 +21,7 @@ INDENT_FLAGS_KERNEL = -nbad -bap -nbc -bbo -hnl -br -brs -c33 -cd33 \
 -saf -saw -ncs -nsc -sob -nfca -cp33 -ss -ts8 -il1
 
 $(basename $(EXEC)): $(SRC_FILES)
-	$(CC) $(CFLAGS) $(SRC_FILES) $@.c -o $(BIN_DIR)/$@
+	$(CC) $(CFLAGS) $(SRC_FILES) $@.c -lcrypt -o $(BIN_DIR)/$@ 
 
 
 clean:
