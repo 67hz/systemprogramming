@@ -70,7 +70,6 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
         pid = strtol(dp->d_name, NULL, 10); /* returns 0 if no digits */
         if (pid) {
             /* printf("Dir: %s \t #: %d\n", dp->d_name, pid); */
-
             FILE *stream;
 
             /* allocate absolute pathname buffer, add 1 for '/' */
@@ -80,7 +79,16 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
                 errMsg("coult not get full path");
                 continue;
             }
+
+            /* create absolute file path */
             sprintf(fullpath, "%s/%s/%s", dirpath, dp->d_name, status);
+
+            /* make sure dir still exists */
+            if (!readdir(dirp)) {
+                errMsg("%s has been closed", fullpath);
+                continue;
+            }
+
             stream = fopen(fullpath, "r");
             if (stream == NULL) {
                 errMsg("could not open %s", fullpath);
@@ -89,24 +97,26 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
 
             /* read into buffer */
             char buf[LINE_MAX];
-            char outputBuf[LINE_MAX];
-            char userIdStr[LOGIN_NAME_MAX];
+            char nameBuf[LINE_MAX];
+            char userIdStr[LOGIN_NAME_MAX + 2];
 
             while (fgets(buf, LINE_MAX, stream))
             {
                 if (strStartsWith(buf, "Name"))
-                    sprintf(outputBuf, "%s", buf);
+                    sprintf(nameBuf, "%s", buf);
 
                 if (strStartsWith(buf, "Uid")) {
                     sprintf(userIdStr, "%d", userId);
+                    /* @TODO regex for uid */
                     if (strstr(buf, userIdStr)) {
-                        printf("NAME: %s", outputBuf);
-                        printf("UID: %s\n", buf);
+                        /* @TODO readdir again to verify process open */
+                        printf("pid: %d\n", pid);
+                        printf("%s", nameBuf);
+                        printf("%s\n", buf);
                     }
                 }
 
             }
-
 
             if (fclose(stream) != 0) {
                 errMsg("could not close %s", fullpath);
@@ -114,7 +124,6 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
                 /* @TODO cleanup fullpath before loop? */
                 continue;
             }
-
             free(fullpath);
         }
     }
