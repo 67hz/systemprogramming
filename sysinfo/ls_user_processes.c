@@ -7,17 +7,16 @@
  *
  * readdir or nftw for traversal??? - readdir - only 1 level deep in /proc/pid
  * use stat to check for user id of owner???
- * read contents of /proc/pid/status to get name? not available in stat
+ * read contents of /proc/pid/status to get name/uid? not available in stat
  *
  */
-
-
 #include <sys/types.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <sys/stat.h>   /* for stat macros */
 #include "tlpi_hdr.h"
 #include "ugid_functions.h"
 
@@ -91,34 +90,34 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
 
             /* read into buffer */
             char buf[LINE_MAX];
-            char nameBuf[LINE_MAX];
-            char userIdStr[LOGIN_NAME_MAX + 2];
+            struct stat statBuf;
+
+            if (stat(fullpath, &statBuf) < 0) {
+                errMsg("stat %s", fullpath);
+                continue;
+            }
+
+            /* verify process matches CLI-arg provided user by userId
+             * and is a regular file */
+            if (statBuf.st_uid != userId || !S_ISREG(statBuf.st_mode))
+                continue;
 
             while (fgets(buf, LINE_MAX, stream))
             {
-                if (strStartsWith(buf, "Name"))
-                    sprintf(nameBuf, "%s", buf);
 
-                if (strStartsWith(buf, "Uid")) {
-                    sprintf(userIdStr, "%d", userId);
-                    /* @TODO regex for uid */
-                    if (strstr(buf, userIdStr)) {
-                        /* @TODO readdir again to verify process open */
-                        printf("pid: %d\t", pid);
-                        printf("%s", nameBuf);
-                        /* print uID below */
-                        /* printf("%s\n", buf); */
-                    }
+                if (strStartsWith(buf, "Name")) {
+                    buf[strlen(buf) - 1] = '\0'; /* replace \n */
+                    printf("%s", buf);
+                    printf("\tpid: %d\n", pid);
+                    break;
                 }
-
             }
 
             if (fclose(stream) != 0) {
                 errMsg("could not close %s", fullpath);
-
-                /* @TODO cleanup fullpath before loop? */
                 continue;
             }
+
             free(fullpath);
         }
     }
@@ -139,12 +138,13 @@ int main
     char *userName;
     const char *procDir = "/proc";
 
-    /* @TODO use `whoami` if no user provided */
     if (argc < 2 || (argc > 1 && strcmp(argv[1], "--help") == 0))
         usageErr("%s username", argv[0]);
 
     userName = argv[1];
-    userId = userIdFromName(userName);
+
+    if ((userId = userIdFromName(userName)) == -1)
+        usageErr("%s is not a valid user", userName);
 
     listFilesByUserId(procDir, userId);
   
