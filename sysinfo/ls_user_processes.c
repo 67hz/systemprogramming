@@ -8,10 +8,6 @@
  * readdir or nftw for traversal??? - readdir - only 1 level deep in /proc/pid
  * use stat to check for user id of owner???
  * read contents of /proc/pid/status to get name? not available in stat
- * get line starting with Uid:
- * if matches current process Uid, (save)/display result
- *
- * see strstr for searching file if not using stat
  *
  */
 
@@ -48,9 +44,7 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
         return;
     }
 
-
     /* loop through entries in dir stream */
-
     for (;;) {
         /* set errno to 0 before calling readdir to distinguish
          * EOS from error
@@ -85,7 +79,7 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
 
             /* make sure dir still exists */
             if (!readdir(dirp)) {
-                errMsg("%s has been closed", fullpath);
+                errMsg("%d has been closed", pid);
                 continue;
             }
 
@@ -110,9 +104,10 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
                     /* @TODO regex for uid */
                     if (strstr(buf, userIdStr)) {
                         /* @TODO readdir again to verify process open */
-                        printf("pid: %d\n", pid);
+                        printf("pid: %d\t", pid);
                         printf("%s", nameBuf);
-                        printf("%s\n", buf);
+                        /* print uID below */
+                        /* printf("%s\n", buf); */
                     }
                 }
 
