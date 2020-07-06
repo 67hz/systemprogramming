@@ -150,6 +150,7 @@ int main
         usageErr("%s is not a valid user\n", userName);
 
     listFilesByUserId(procDir, userId);
+    printf("\nProcesses running for user: %s\n", userName);
   
     exit(EXIT_SUCCESS);
 }
