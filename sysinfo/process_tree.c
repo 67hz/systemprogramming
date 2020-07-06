@@ -53,12 +53,17 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
 static int
 process_fill_by_status (char *buf, PROC *proc)
 {
+    char field[LINE_MAX];
+    char value[LINE_MAX];
 
     buf[strlen(buf) - 1] = '\0'; /* replace fgets \n */                 
 
     if (str_starts_with(buf, "Name")) {
-        sscanf(buf, "%*[^]:]%c", proc->name);
-        printf("\nName: %s", proc->name);
+        /* printf("%s", buf); */
+        /* sscanf(buf, "%*s%s", field); */
+        sscanf(buf, "%s%s", field, value);
+        printf("\nField =  %s", field);
+        printf("\nValue=  %s", value);
     }
     if (str_starts_with(buf, "Pid")) {
         sscanf(buf, "%*[^]0-9]%d", &proc->pid);
