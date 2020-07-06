@@ -3,7 +3,7 @@
  * usage:
  * $ ls_user_processes 
  *
- * arg 1 - user name or defaults to `whoami`
+ * arg 1 - user name or defaults to getlogin()
  *
  * readdir or nftw for traversal??? - readdir - only 1 level deep in /proc/pid
  * use stat to check for user id of owner???
@@ -106,7 +106,7 @@ listFilesByUserId(const char *dirpath, const uid_t userId)
             {
 
                 if (strStartsWith(buf, "Name")) {
-                    buf[strlen(buf) - 1] = '\0'; /* replace \n */
+                    buf[strlen(buf) - 1] = '\0'; /* replace fgets \n */                 
                     printf("%s", buf);
                     printf("\tpid: %d\n", pid);
                     break;
@@ -138,13 +138,16 @@ int main
     char *userName;
     const char *procDir = "/proc";
 
-    if (argc < 2 || (argc > 1 && strcmp(argv[1], "--help") == 0))
-        usageErr("%s username", argv[0]);
+    if (argc > 2 || (argc > 1 && strcmp(argv[1], "--help") == 0))
+        usageErr("%s username\n", argv[0]);
 
-    userName = argv[1];
+    if (argc < 2)
+        userName = getlogin();
+    else 
+        userName = argv[1];
 
     if ((userId = userIdFromName(userName)) == -1)
-        usageErr("%s is not a valid user", userName);
+        usageErr("%s is not a valid user\n", userName);
 
     listFilesByUserId(procDir, userId);
   
