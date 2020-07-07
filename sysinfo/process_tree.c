@@ -71,7 +71,7 @@ process_fill_by_status (char *buf, PROC *proc)
         printf("\nPID: %d\n", proc->pid);
     }
 
-    /* @TODO if PPID is exists and !=1 will need to traverse up the chain */
+    /* @TODO if PPID exists and !=1 will need to traverse up the chain */
     /* if (str_starts_with(buf, "PPid")) { */
     /*     sscanf(buf, "%*[^]0-9]%d", &ppid); */
     /* } */
