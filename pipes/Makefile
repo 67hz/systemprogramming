@@ -12,7 +12,6 @@ CC = $(CXX)
 DEBUG_LEVEL = -ggdb3
 
 CFLAGS= $(DEBUG_LEVEL) -std=c99 -D_XOPEN_SOURCE=600  -I$(SYSPROG_DIR) -I../users
-# LDFLAGS = -L$(SYSPROG_DIR) 
 
 
 

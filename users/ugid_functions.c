@@ -15,7 +15,12 @@ userNameFromId(uid_t uid)
   return (pwd == NULL) ? NULL : pwd->pw_name;
 }
 
-/* return UID from 'name', -1 on error */
+/**
+ * get a UID from 'name' string
+ *
+ * @param [in] name of user
+ * @return userId, -1 on erro
+ */
 uid_t
 userIdFromName(const char *name)
 {

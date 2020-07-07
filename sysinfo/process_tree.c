@@ -3,6 +3,10 @@
  *
  * Username is not required, could filter for only processes for the user ITF.
  *
+ *
+ *  All pid stored in global pid arr [pid_max] where pid is index
+ *  pointing to a PROC? Could be a huge sparse array.
+ *
  */
 
 
@@ -53,23 +57,27 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
 static int
 process_fill_by_status (char *buf, PROC *proc)
 {
-    char field[LINE_MAX];
-    char value[LINE_MAX];
-
-    buf[strlen(buf) - 1] = '\0'; /* replace fgets \n */                 
+    /* char field[LINE_MAX]; */
+    pid_t ppid;
 
     if (str_starts_with(buf, "Name")) {
         /* printf("%s", buf); */
-        /* sscanf(buf, "%*s%s", field); */
-        sscanf(buf, "%s%s", field, value);
-        printf("\nField =  %s", field);
-        printf("\nValue=  %s", value);
+        /* sscanf(buf, "%s%s", field, proc->name); */
+        sscanf(buf, "%*s%s", proc->name);
+        printf("\nProcess: %s", proc->name);
     }
     if (str_starts_with(buf, "Pid")) {
         sscanf(buf, "%*[^]0-9]%d", &proc->pid);
         printf("\nPID: %d\n", proc->pid);
     }
 
+    /* @TODO if PPID is exists and !=1 will need to traverse up the chain */
+    /* if (str_starts_with(buf, "PPid")) { */
+    /*     sscanf(buf, "%*[^]0-9]%d", &ppid); */
+    /* } */
+
+
+    /* @TODO add Uid, Gid */
 
     return 0;
 }
@@ -105,19 +113,19 @@ crawl_proc ()
         if (pid) {  /* only want numbered  dirs */
 
             if (!(path = malloc(strlen(PROC_BASE) + strlen(de->d_name) +
-                            strlen(PROC_STATUS) + 2))) {
-                errMsg("Could not get full path: %s", de->d_name);
-                continue;
-            }
-            sprintf(path, "%s/%s/%s", PROC_BASE, de->d_name, PROC_STATUS);
+                            strlen(PROC_STATUS) + 3))) /* extra '/'s and NL */
+                errExit("Could not get full path: %s", de->d_name);
+
+            sprintf(path, "%s/%d/%s", PROC_BASE, pid, PROC_STATUS);
+
+            PROC *proc;
+            if (! (proc = malloc(sizeof(*proc))))
+                errExit("Could not allocate PROC for %d", pid);
 
             if ((file = fopen (path, "r")) != NULL) {
                 while (fgets(buf, LINE_MAX, file))
                 {
-                    PROC *proc;
-                    if (! (proc = malloc(sizeof(PROC))))
-                        errMsg("Could not allocate PROC for %d", pid);
-
+                    buf[strlen(buf) - 1] = '\0'; /* replace fgets \n with \0*/                 
                     process_fill_by_status(buf, proc);
 
                 }
