@@ -2,6 +2,8 @@
 #include "get_num.h"
 #include "tlpi_hdr.h"
 
+
+
 char *
 getCurrentTime()
 {
@@ -17,7 +19,7 @@ getCurrentTime()
         perror("localtime");
 
     // %r = am.pm notation
-    strftime(buf, BUFSIZ, "%b", tm);
+    strftime(buf, BUFSIZ, "%D %r", tm);
     return buf;
 }
 
