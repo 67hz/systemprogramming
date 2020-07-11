@@ -125,7 +125,8 @@ crawl_proc ()
             if ((file = fopen (path, "r")) != NULL) {
                 while (fgets(buf, LINE_MAX, file))
                 {
-                    buf[strlen(buf) - 1] = '\0'; /* replace fgets \n with \0*/                 
+                    if (buf[strlen(buf) - 1] == '\n')   /* replace fgets \n with \0 */
+                        buf[strlen(buf) - 1] = '\0';
                     process_fill_by_status(buf, proc);
 
                 }
