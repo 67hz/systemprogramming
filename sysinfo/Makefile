@@ -1,5 +1,5 @@
 # pass EXEC as var to make
-# EXEC = copy 
+EXEC = process_tree.c
 OBJECTS = 
 SYSPROG_DIR = ../lib
 USERS_DIR = ../users
@@ -24,7 +24,11 @@ $(basename $(EXEC)): $(SRC_FILES)
 	$(CC) $(CFLAGS) $(SRC_FILES) $@.c -lcrypt -o $(BIN_DIR)/$@ 
 
 
+debug:
+	@echo Debugging
+	gdb ./bin/process_tree core
+
 clean:
 	rm -rf *.o
 
-phony: .clean
+phony: .clean .debug

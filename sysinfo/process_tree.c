@@ -8,8 +8,7 @@
  *  pointing to a PROC?
  *
  *  hash ideas:
- *  take sum of pid digits??? 7 * 9 = max of 63 spaces (64 bits use bitmask???)
- *  [sum][num_digits]->SingleList for collisions
+ *  take sum of pid digits??? 7 * 9 = max of 63 spaces (64 bits use bitmask???) *  [sum][num_digits]->SingleList for collisions
  *  * see kernel's pidhash
  *
  */
@@ -40,15 +39,16 @@
    plist similar to kernel's task_list of task_struct(s)
    or /linux/pid.h for foreach macros */
 
-#define for_each(list_head)      \
-    if (list_head)               \
-        for (; (list_head)->next != NULL; (list_head) = (list_head)->next)
+/* based on kernel */
+#define klist_for_each(p, list) \
+    for (p = list->next; p != list; p = p->next)
 
-#define pid_matches(list_head, pid)   ( ((list_head)->proc && (list_head)->proc->pid == pid) ? 1 : 0)
+#define pid_matches(list_head, tid)   ( ((list_head)->process && (list_head)->process->pid == tid) ? 1 : 0)
+
 #define list_is_tail(list, element) ((element)->next == NULL ? 1 : 0)
 
 typedef struct _proc PROC;
-typedef struct _child CHILD;
+typedef struct _list_head list_head;
 
 struct _proc
 {
@@ -56,15 +56,14 @@ struct _proc
     /* pid_t   pgid; */
     /* uid_t   uid; */
     PROC    *parent;
-    CHILD   *children;
+    list_head *children;
     char    name[LINE_MAX]; /* _PC_NAME_MAX instead? */
 };
 
-struct _child {
-    PROC    *proc;
-    CHILD   *next;
+struct _list_head {
+    PROC* process;
+    list_head *next;
 };
-
 
 static Boolean
 str_starts_with(const char *restrict str, const char *restrict prefix)
@@ -87,52 +86,56 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
  *
  * @remarks Align memory or allocate enough space for all CHILD's at once?
  */
-CHILD*
-proc_fetch_or_alloc (CHILD *list_head, pid_t pid)
+list_head *
+proc_fetch_or_alloc (list_head *proc, pid_t pid)
 {
-    for_each(list_head) {
-        if (pid_matches(list_head, pid))
-            return list_head;
+    list_head *p;
+    klist_for_each(p, proc) {
+        if (pid_matches(p, pid)) {
+            printf("got match");
+            return p;
+        }
     }
 
-    /* otherwise allocate new CHILD */
-    if (!list_head)
-        list_head = malloc(sizeof(*list_head));
+    if (!p->process) {
+        p->process = malloc(sizeof(PROC));
+        if (!p->process)
+            errExit("Failed to malloc p->process\n");
 
-    /* @TODO clean up nested structure allocations */
-    if (!list_head->proc)
-        list_head->proc = malloc(sizeof(PROC));
+    }
 
 
-    if (list_head == NULL)
-        errExit("Failed to malloc PROC");
-
-    return list_head;
+    return p;
 }
 
 static int
-process_fill_by_status (char *buf, CHILD *list_head, pid_t pid)
+process_fill_by_status (char *buf, list_head *node, pid_t pid)
 {
     pid_t ppid;
-    CHILD *child = list_head;
+
 
     if (str_starts_with(buf, "Name")) {
         /* printf("%s", buf); */
-        /* sscanf(buf, "%s%s", field, proc->name); */
-        sscanf(buf, "%*s%s", child->proc->name);
-        printf("\nProcess: %s", child->proc->name);
+        /* sscanf(buf, "%s%s", field, node->process->name); */
+        sscanf(buf, "%*s%s", node->process->name);
+        printf("\nProcess: %s", node->process->name);
     }
+
     if (str_starts_with(buf, "Pid")) {
-        sscanf(buf, "%*[^]0-9]%d", &child->proc->pid);
-        printf("\nPID: %d\n", child->proc->pid);
+        sscanf(buf, "%*[^]0-9]%d", &node->process->pid);
+        printf("\nPID: %d\n", node->process->pid);
     }
+
 
 
     if (str_starts_with(buf, "PPid")) {
         sscanf(buf, "%*[^]0-9]%d", &ppid);
         printf("\nPPid: %zu\n", (long) ppid);
         /* PROC *parent_proc = proc_fetch_or_alloc(child->proc->parent, ppid); */
+        read_proc_dir_by_pid(ppid, node);
     }
+#if 0 
+#endif
 
 
     /* @TODO add Uid, Gid */
@@ -142,45 +145,39 @@ process_fill_by_status (char *buf, CHILD *list_head, pid_t pid)
 }
 
 static void
-read_proc_dir (struct dirent *de, CHILD *list_head)
+read_proc_dir_by_pid (pid_t pid, list_head *process)
 {
     FILE *file;
     char *path;
     char buf[LINE_MAX];
-    pid_t pid;
-    pid = (pid_t) strtol(de->d_name, NULL, 10);
-    if (pid) {  /* only want numbered  dirs */
+
+    if (!(path = malloc(strlen(PROC_BASE) +
+                    strlen(PROC_STATUS) + 10))) /* extra '/'s, pid, and NL */
+        errExit("Could not get full path: %zu", (long) pid);
+
+    sprintf(path, "%s/%zu/%s", PROC_BASE, (long) pid, PROC_STATUS);
 
 
-        if (!(path = malloc(strlen(PROC_BASE) + strlen(de->d_name) +
-                        strlen(PROC_STATUS) + 3))) /* extra '/'s and NL */
-            errExit("Could not get full path: %s", de->d_name);
+    if ((file = fopen (path, "r")) != NULL) {
+        printf("path: %s\n", path);
+        list_head *selected_process = proc_fetch_or_alloc(process, pid);
 
-        sprintf(path, "%s/%d/%s", PROC_BASE, pid, PROC_STATUS);
-
-
-        if ((file = fopen (path, "r")) != NULL) {
-            printf("path: %s\n", path);
-            CHILD *child_process = proc_fetch_or_alloc(list_head, pid);
-
-            while (fgets(buf, LINE_MAX, file))
-            {
-                if (buf[strlen(buf) - 1] == '\n')   /* replace fgets \n with \0 */
-                    buf[strlen(buf) - 1] = '\0';
-                process_fill_by_status(buf, child_process, pid);
-            }
-            fclose(file);
+        while (fgets(buf, LINE_MAX, file))
+        {
+            if (buf[strlen(buf) - 1] == '\n')   /* replace fgets \n with \0 */
+                buf[strlen(buf) - 1] = '\0';
+            process_fill_by_status(buf, selected_process, pid);
         }
-
-
+        fclose(file);
     }
+
 }
 
 /**
  * @brief crawl PROC_BASE and create PROC entries
  */
 static void
-crawl_proc (CHILD *list_head)
+crawl_proc (list_head *list_head)
 {
     DIR *dirp;
     struct dirent *de;
@@ -199,19 +196,38 @@ crawl_proc (CHILD *list_head)
         if (de == NULL) /* EOS */
             break;
 
-        read_proc_dir(de, list_head);
+        pid = (pid_t) strtol(de->d_name, NULL, 10);
+        if (pid)
+            read_proc_dir_by_pid(pid, list_head);
     }
 
     closedir(dirp);
 
 }
 
+list_head*
+list_init ()
+{
+    list_head *head = malloc(sizeof(*head));
+    if (head == NULL)
+        errExit("list_init alloc");
+
+    /* no process for initial element */
+
+    /*
+     * make this a circular list - makes traversing as simple as checking if 
+     * element == start element. thus traversing can start from any element.
+     */
+    head->next = head;
+
+    return head;
+}
+
 
 int main(int argc, char *argv[])
 {
-    PROC *current;
-    CHILD *list_head = proc_fetch_or_alloc(list_head, 0);
-    list_head->proc = current;
+    /* create initial list element linked to itself */
+    list_head* list_head = list_init();
 
     /* open current dir to return to later */
     int ret;
