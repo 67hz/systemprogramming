@@ -12,8 +12,6 @@
  *  [sum][num_digits]->SingleList for collisions
  *  * see kernel's pidhash
  *
- *  But... is it worth storing all PIDs like this?
- *
  */
 
 
@@ -25,17 +23,26 @@
 #include <stdio.h>
 #include <limits.h>
 #include <sys/stat.h>   /* for stat macros */
+#include "error_functions.h"
 #include "tlpi_hdr.h"
 #include "ugid_functions.h"
 
 
+#ifdef ROOT_RUN
 #define PROC_BASE           "proc"
+#else
+#define PROC_BASE           "/proc"
+#endif
+
 #define PROC_STATUS         "status"
 
-/* see LKD p.30 */
-/* plist similar to kerne's task_list of task_struct(s) */
+/* see LKD p.30
+   plist similar to kernel's task_list of task_struct(s)
+   or /linux/pid.h for foreach macros */
+
 #define for_each(list_head)      \
-    for (; (list_head)->next != NULL; (list_head) = (list_head)->next)
+    if (list_head)               \
+        for (; (list_head)->next != NULL; (list_head) = (list_head)->next)
 
 #define pid_matches(list_head, pid)   ( ((list_head)->proc && (list_head)->proc->pid == pid) ? 1 : 0)
 #define list_is_tail(list, element) ((element)->next == NULL ? 1 : 0)
@@ -50,7 +57,7 @@ struct _proc
     /* uid_t   uid; */
     PROC    *parent;
     CHILD   *children;
-    char    name[_PC_NAME_MAX + 1]; /* for \0 */
+    char    name[LINE_MAX]; /* _PC_NAME_MAX instead? */
 };
 
 struct _child {
@@ -89,11 +96,18 @@ proc_fetch_or_alloc (CHILD *list_head, pid_t pid)
     }
 
     /* otherwise allocate new CHILD */
-    CHILD *proc = malloc(sizeof(*proc));
+    if (!list_head)
+        list_head = malloc(sizeof(*list_head));
 
-    if (proc == NULL)
+    /* @TODO clean up nested structure allocations */
+    if (!list_head->proc)
+        list_head->proc = malloc(sizeof(PROC));
+
+
+    if (list_head == NULL)
         errExit("Failed to malloc PROC");
-    return proc;
+
+    return list_head;
 }
 
 static int
@@ -113,10 +127,11 @@ process_fill_by_status (char *buf, CHILD *list_head, pid_t pid)
         printf("\nPID: %d\n", child->proc->pid);
     }
 
-    /* @TODO if PPID exists and !=1 will need to traverse up the chain */
+
     if (str_starts_with(buf, "PPid")) {
         sscanf(buf, "%*[^]0-9]%d", &ppid);
         printf("\nPPid: %zu\n", (long) ppid);
+        /* PROC *parent_proc = proc_fetch_or_alloc(child->proc->parent, ppid); */
     }
 
 
@@ -136,16 +151,18 @@ read_proc_dir (struct dirent *de, CHILD *list_head)
     pid = (pid_t) strtol(de->d_name, NULL, 10);
     if (pid) {  /* only want numbered  dirs */
 
+
         if (!(path = malloc(strlen(PROC_BASE) + strlen(de->d_name) +
                         strlen(PROC_STATUS) + 3))) /* extra '/'s and NL */
             errExit("Could not get full path: %s", de->d_name);
 
         sprintf(path, "%s/%d/%s", PROC_BASE, pid, PROC_STATUS);
-        printf("path: %s\n", path);
+
 
         if ((file = fopen (path, "r")) != NULL) {
-
+            printf("path: %s\n", path);
             CHILD *child_process = proc_fetch_or_alloc(list_head, pid);
+
             while (fgets(buf, LINE_MAX, file))
             {
                 if (buf[strlen(buf) - 1] == '\n')   /* replace fgets \n with \0 */
@@ -154,6 +171,7 @@ read_proc_dir (struct dirent *de, CHILD *list_head)
             }
             fclose(file);
         }
+
 
     }
 }
@@ -192,10 +210,13 @@ crawl_proc (CHILD *list_head)
 int main(int argc, char *argv[])
 {
     PROC *current;
-    CHILD *list_head;
+    CHILD *list_head = proc_fetch_or_alloc(list_head, 0);
+    list_head->proc = current;
 
     /* open current dir to return to later */
     int ret;
+
+#ifdef ROOT_RUN
     int swd_fd;
     swd_fd = open (".", O_RDONLY);
     if (swd_fd == -1)
@@ -206,11 +227,12 @@ int main(int argc, char *argv[])
     if (ret == -1) {
         errExit("Could not change to root dir\n");
     }
-
+#endif
 
     crawl_proc(list_head);
 
 
+#ifdef ROOT_RUN
     /**
      * return to original dir. unneccessary as only process runs from the chdir.
      * here for example only.
@@ -225,7 +247,7 @@ int main(int argc, char *argv[])
     if (ret == -1) {
         errExit("Could not close original dir");
     }
-
+#endif
 
     
     exit(EXIT_SUCCESS);
