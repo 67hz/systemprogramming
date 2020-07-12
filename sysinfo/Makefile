@@ -23,12 +23,15 @@ INDENT_FLAGS_KERNEL = -nbad -bap -nbc -bbo -hnl -br -brs -c33 -cd33 \
 $(basename $(EXEC)): $(SRC_FILES)
 	$(CC) $(CFLAGS) $(SRC_FILES) $@.c -lcrypt -o $(BIN_DIR)/$@ 
 
-
 debug:
 	@echo Debugging
+	gdb ./bin/process_tree
+
+debug-core:
+	@echo Debugging Core
 	gdb ./bin/process_tree core
 
 clean:
 	rm -rf *.o
 
-phony: .clean .debug
+phony: .clean .debug-core .debug

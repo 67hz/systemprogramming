@@ -87,59 +87,58 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
  * @remarks Align memory or allocate enough space for all CHILD's at once?
  */
 list_head *
-proc_fetch_or_alloc (list_head *proc, pid_t pid)
-{
+proc_fetch_or_alloc(list_head *list, pid_t pid) {
     list_head *p;
-    klist_for_each(p, proc) {
+    PROC *proc;
+    klist_for_each(p, list) {
         if (pid_matches(p, pid)) {
-            printf("got match");
+            printf("got match\n");
             return p;
         }
     }
 
-    if (!p->process) {
-        p->process = malloc(sizeof(PROC));
-        if (!p->process)
-            errExit("Failed to malloc p->process\n");
+    /*
+     * no match found 
+     * will always have a p - inits to circular list
+     * p = list if not found above
+     */
+    list_head *new_node = malloc(sizeof(*new_node));
+    new_node->process = malloc(sizeof(PROC));
+    if (!new_node || !new_node->process)
+        errExit("Failed to malloc node\n");
 
-    }
+
+    /* insert node into chain */
+    list_head *temp = list->next;
+    new_node->next = temp;
+    list->next = new_node;
 
 
-    return p;
+    return new_node;
 }
 
-static int
+static pid_t
 process_fill_by_status (char *buf, list_head *node, pid_t pid)
 {
     pid_t ppid;
 
 
     if (str_starts_with(buf, "Name")) {
-        /* printf("%s", buf); */
-        /* sscanf(buf, "%s%s", field, node->process->name); */
         sscanf(buf, "%*s%s", node->process->name);
-        printf("\nProcess: %s", node->process->name);
+        return 0;
     }
 
     if (str_starts_with(buf, "Pid")) {
         sscanf(buf, "%*[^]0-9]%d", &node->process->pid);
-        printf("\nPID: %d\n", node->process->pid);
+        return 0;
     }
-
 
 
     if (str_starts_with(buf, "PPid")) {
         sscanf(buf, "%*[^]0-9]%d", &ppid);
-        printf("\nPPid: %zu\n", (long) ppid);
-        /* PROC *parent_proc = proc_fetch_or_alloc(child->proc->parent, ppid); */
-        read_proc_dir_by_pid(ppid, node);
+        if (ppid > 0 && ppid != 1)
+            return ppid;
     }
-#if 0 
-#endif
-
-
-    /* @TODO add Uid, Gid */
-    /* free(proc); */
 
     return 0;
 }
@@ -150,6 +149,7 @@ read_proc_dir_by_pid (pid_t pid, list_head *process)
     FILE *file;
     char *path;
     char buf[LINE_MAX];
+    int ret_pid;
 
     if (!(path = malloc(strlen(PROC_BASE) +
                     strlen(PROC_STATUS) + 10))) /* extra '/'s, pid, and NL */
@@ -159,14 +159,15 @@ read_proc_dir_by_pid (pid_t pid, list_head *process)
 
 
     if ((file = fopen (path, "r")) != NULL) {
-        printf("path: %s\n", path);
+        /* printf("path: %s\n", path); */
         list_head *selected_process = proc_fetch_or_alloc(process, pid);
 
         while (fgets(buf, LINE_MAX, file))
         {
             if (buf[strlen(buf) - 1] == '\n')   /* replace fgets \n with \0 */
                 buf[strlen(buf) - 1] = '\0';
-            process_fill_by_status(buf, selected_process, pid);
+            if ((ret_pid = process_fill_by_status(buf, selected_process, pid)) != 0)
+                read_proc_dir_by_pid(ret_pid, process);
         }
         fclose(file);
     }
@@ -203,6 +204,15 @@ crawl_proc (list_head *list_head)
 
     closedir(dirp);
 
+}
+
+void
+print_list(list_head *list)
+{
+    list_head *p;
+    klist_for_each(p, list) {
+        printf("Process: %zu - %s\n", (long) p->process->pid, p->process->name);
+    }
 }
 
 list_head*
@@ -246,6 +256,13 @@ int main(int argc, char *argv[])
 #endif
 
     crawl_proc(list_head);
+
+    print_list(list_head);
+
+    /*
+     * @TODO free_list(list_head);
+     */
+
 
 
 #ifdef ROOT_RUN
