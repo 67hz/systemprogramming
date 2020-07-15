@@ -39,9 +39,11 @@
 
 /* based on kernel */
 #define klist_for_each(p, list) \
-    for (p = list->next; p != list; p = p->next)
+    for ((p) = (list)->next; (p) != (list); (p) = (p)->next)
 
-#define pid_matches(list_head, tid)   ( ((list_head)->process && (list_head)->process->pid == tid) ? 1 : 0)
+#define pid_matches(list_head, tid)   ( ((list_head)->process && (list_head)->process->pid == (tid)) ? 1 : 0)
+
+#define list_head_pid(list_head) (((list_head) && (list_head)->process && (list_head)->process->pid) ? (list_head)->process->pid : -1)
 
 #define list_is_tail(list, element) ((element)->next == NULL ? 1 : 0)
 
@@ -83,8 +85,15 @@ list_add(list_head **list, list_head *node)
         return *list;
     }
 
-	list_head *temp = (*list)->next;
-	node->next = temp;
+    /* check if already in list by pid */
+    list_head *iter;
+
+    klist_for_each(iter, *list)
+        if (pid_matches(iter, list_head_pid(node)))
+            return iter;
+
+	iter = (*list)->next;
+	node->next = iter;
 	(*list)->next = node;
     return *list;
 }
@@ -117,6 +126,33 @@ print_list(list_head * list)
 	}
 }
 
+/**
+ * Remove child from list and return child.
+ * @param list to remove element from
+ * @param node to remove
+ * @return @node
+ * @remark This does not free child and will return node regardless of it being
+ * in the list (unlikely).
+ */
+list_head *list_remove_and_return(list_head *list, list_head *node) {
+  list_head **start = &list;
+  list_head *iter = list->next;
+  list_head *prev = NULL;
+
+  while (iter && iter != *start) {
+    prev = iter;
+    iter = iter->next;
+    if (pid_matches(node, list_head_pid(iter))) {
+
+      /* remove node from list (don't free) and return it */
+      prev->next = iter->next;
+      return iter;
+    }
+  }
+
+  /* if match not found, return original node */
+  return node;
+}
 
 void
 free_list(list_head * list)
@@ -142,28 +178,6 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
 			return 0;
 	}
 	return 1;
-}
-
-/**
- * @param [out] list points to match
- * @returns TRUE if match else FALSE
- */
-static Boolean
-list_find_pid_match (list_head **list_out, pid_t pid)
-{
-    list_head *list = *list_out;
-    if (!list || !list->next)
-        return FALSE;
-
-    list_head *p;
-    klist_for_each(p, list) {
-        if (pid_matches(p, pid)) {
-            *list_out = p;
-            return TRUE;
-        }
-    }
-    return FALSE;
-
 }
 
 /**
@@ -198,24 +212,6 @@ proc_fetch_or_alloc(list_head *list, pid_t pid)
 	return new_node;
 }
 
-list_head *
-list_add_proc(list_head **list, PROC *process)
-{
-    list_head *node;
-    if (!process->pid)
-        errExit("No pid available\n");
-
-    if (list_find_pid_match(list, process->pid)) {
-        return *list;
-    }
-
-    node = malloc(sizeof(*node));
-    node->process = process;
-
-    *list = list_add(list, node);
-    return *list;
-}
-
 static char *
 get_path(pid_t pid)
 {
@@ -241,7 +237,10 @@ read_proc_dir_by_pid(pid_t pid, list_head *list, list_head *child)
         list_head *selected_process = proc_fetch_or_alloc(list, pid);
         if (child && child->process && child->process->pid) {
             child->process->parent = selected_process->process;
-            list_add_proc(&child->process->parent->children, child->process);
+
+            /* remove node from main list to insert into parent's children */
+            list_head *child_head = list_remove_and_return(list, child);
+            list_add(&child->process->parent->children, child_head);
         }
 
 
