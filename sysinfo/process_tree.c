@@ -75,18 +75,18 @@ list_init()
 }
 
 list_head *
-list_add(list_head *list, list_head *node)
+list_add(list_head **list, list_head *node)
 {
-    if (list == NULL) {
-        list = list_init();
-        list->process = node->process;
-        return list;
+    if (*list == NULL) {
+        *list = list_init();
+        (*list)->process = node->process;
+        return *list;
     }
 
-	list_head *temp = list->next;
+	list_head *temp = (*list)->next;
 	node->next = temp;
-	list->next = node;
-    return list;
+	(*list)->next = node;
+    return *list;
 }
 
 
@@ -109,7 +109,7 @@ print_list(list_head * list)
             /* print_list(p->process->children); */
             klist_for_each(c, p->process->children) {
                 printf("|-");
-                printf("-%zu-|\t%s\n", (long) c->process->pid, c->process->name);
+                printf("-%zu-|%s\n", (long) c->process->pid, c->process->name);
             }
 
             printf("\n");
@@ -194,26 +194,26 @@ proc_fetch_or_alloc(list_head *list, pid_t pid)
 		errExit("Failed to malloc node\n");
 
 	/* insert node into chain */
-    (void) list_add(list, new_node);
+    (void) list_add(&list, new_node);
 	return new_node;
 }
 
 list_head *
-list_add_proc(list_head *list, PROC *process)
+list_add_proc(list_head **list, PROC *process)
 {
     list_head *node;
     if (!process->pid)
         errExit("No pid available\n");
 
-    if (list_find_pid_match(&list, process->pid)) {
-        return list;
+    if (list_find_pid_match(list, process->pid)) {
+        return *list;
     }
 
     node = malloc(sizeof(*node));
     node->process = process;
 
-    list = list_add(list, node);
-    return list;
+    *list = list_add(list, node);
+    return *list;
 }
 
 static char *
@@ -241,7 +241,7 @@ read_proc_dir_by_pid(pid_t pid, list_head *list, list_head *child)
         list_head *selected_process = proc_fetch_or_alloc(list, pid);
         if (child && child->process && child->process->pid) {
             child->process->parent = selected_process->process;
-            child->process->parent->children = list_add_proc(child->process->parent->children, child->process);
+            list_add_proc(&child->process->parent->children, child->process);
         }
 
 
