@@ -44,7 +44,7 @@
  * set the 'm' for the pid hash table
  */
 #ifndef PIDHASH_SZ
-#define PIDHASH_SZ 1024
+#define PIDHASH_SZ 16
 #endif
 
 #define PROC_STATUS         "status"
@@ -160,9 +160,26 @@ list_add(list_head **list, list_head *node)
 }
 
 
+void
+print_hash_list(const hash_t hash_table)
+{
+    int i = 0;
+    int buckets = get_pid_max();
+    list_head *list;
+
+    for (i = 0; i < buckets; i++) {
+        list = hash_table[i];
+        printf("\n\n\nBUCKETS: \t %d\n", i);
+
+        for (; list->next != NULL; list = list->next) {
+            printf("%s: %zu\n", list->process->name, (long) list->process->pid);
+            printf("|\n");
+        }
+    }
+}
 
 void
-print_list(list_head * list)
+print_list(const list_head * list)
 {
 	list_head *p, *c;
     PROC *par;
@@ -290,6 +307,7 @@ hash_init (hash_t hash_table)
 
     for (i = 0; i < pid_max; i++) {
         list_head *new_list = list_init();
+        new_list->next = NULL;  /* singly linked list for hash */
         hash_table[i] = new_list;
     }
 
@@ -321,17 +339,24 @@ hash_lookup (hash_t hash_table, pid_t pid, list_head *data)
 }
 
 static void
-hash_add_process (hash_t hash_table, PROC ** proc)
+hash_add_process (hash_t hash_table, PROC const * const proc)
 {
     list_head *data;
-    int key = hash_pid ((*proc)->pid);
+    int key = hash_pid ((proc)->pid);
 
 
     /* do nothing if h_table already has node (by pid) */
-    if (hash_lookup (hash_table, (*proc)->pid, data) == 1)
-        return;
+    /* if (hash_lookup (hash_table, proc->pid, data) == 1) */
+    /*     return; */
 
-    /* list_add (&hash_table[key], data); */
+    /* insert at head of list */
+    list_head *node = calloc(1, sizeof(*node));
+    node->process = (PROC *) proc;
+
+    list_head *head = hash_table[key];
+    node->next = head;
+    hash_table[key] = node;
+
 }
 
 static void
@@ -365,7 +390,7 @@ read_proc_dir_by_pid(pid_t pid, list_head *list, hash_t hash_table)
                     sscanf(buf, "%*[^]0-9]%d", &proc->ppid);
 		}
 		fclose(file);
-        hash_add_process(hash_table, &proc);
+        hash_add_process(hash_table, proc);
 	}
 
 
@@ -439,7 +464,8 @@ main(int argc, char *argv[])
 	crawl_proc(list_head, hash_table);
 
 	/* free_list(list_head); */
-	print_list(list_head);
+	/* print_list(list_head); */
+	print_hash_list(hash_table);
 
 #ifdef ROOT_RUN
     /**
