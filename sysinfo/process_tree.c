@@ -172,7 +172,7 @@ print_hash_list(const hash_t hash_table)
         printf("\n\n\nBUCKETS: \t %d\n", i);
 
         for (; list->next != NULL; list = list->next) {
-            printf("%s: %zu\n", list->process->name, (long) list->process->pid);
+            printf("%s: pid: %zu ppid: %zu\n", list->process->name, (long) list->process->pid, (long) list->process->ppid);
             printf("|\n");
         }
     }
@@ -296,7 +296,7 @@ get_path(pid_t pid)
 
 /**
  * @brief Init a chained hash table of * to list_head
- * @param [out] hash_table ptr to hash_table
+ * @param [out] hash_table array of list_head *'s
  * @return 0 on success, -1 on error
  */
 int
@@ -305,10 +305,14 @@ hash_init (hash_t hash_table)
     int i;
     int pid_max = get_pid_max();
 
+    /*
+     * create singly linked list of list_head nodes
+     * for each hash bucket
+     */
     for (i = 0; i < pid_max; i++) {
-        list_head *new_list = list_init();
-        new_list->next = NULL;  /* singly linked list for hash */
-        hash_table[i] = new_list;
+        hash_table[i] = list_init();
+        hash_table[i]->next = NULL;
+
     }
 
     return 0;
@@ -329,11 +333,13 @@ hash_lookup (hash_t hash_table, pid_t pid, list_head *data)
     list_head *iter;
     int key = hash_pid(pid);
 
-        klist_for_each(iter, hash_table[key])
+    for (iter = hash_table[key]; iter->next != NULL; iter = iter->next) {
             if (pid_matches(iter, pid)) {
+                printf("GOT MATCH");
                 data = iter;
                 return 0;
             }
+    }
 
     return -1;
 }
@@ -346,8 +352,8 @@ hash_add_process (hash_t hash_table, PROC const * const proc)
 
 
     /* do nothing if h_table already has node (by pid) */
-    /* if (hash_lookup (hash_table, proc->pid, data) == 1) */
-    /*     return; */
+    if (hash_lookup (hash_table, proc->pid, data) == 0)
+        return;
 
     /* insert at head of list */
     list_head *node = calloc(1, sizeof(*node));
@@ -462,6 +468,8 @@ main(int argc, char *argv[])
 
 	/* create circular list of all unique running pids */
 	crawl_proc(list_head, hash_table);
+
+    /* @TODO assemble pid relationships using buffer and hash_t */
 
 	/* free_list(list_head); */
 	/* print_list(list_head); */
