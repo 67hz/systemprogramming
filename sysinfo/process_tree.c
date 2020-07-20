@@ -66,7 +66,7 @@
 
 #define list_is_tail(list, element) ((element)->next == NULL ? 1 : 0)
 
-#define ALLOC_NEW(T, ...) T ## _init(calloc(1, sizeof(T)), __VA_ARGS__)
+#define ALLOC_NEW(T, S, ...) T ## _init(calloc(S, sizeof(T)), __VA_ARGS__)
 
 typedef struct _proc PROC;
 typedef struct _list_head list_head;
@@ -130,16 +130,56 @@ hash_pid (pid_t pid)
     return ((pid >> 8) ^ pid) & (PIDHASH_SZ - 1);
 }
 
+
+PROC *
+PROC_init (PROC *proc, const pid_t pid)
+{
+    printf("allocated proc for %zu\n", (long) pid);
+    proc->pid = pid;
+    return proc;
+}
+
+list_head *
+list_head_init (list_head *list, const pid_t pid)
+{
+    PROC * proc = ALLOC_NEW (PROC, 1, pid);
+    list->process = proc;
+    return list;
+}
+
 list_head *
 list_init() {
-  list_head *head = calloc(1, sizeof(*head));
-  memset(head, 0, sizeof(*head));
-  if (head == NULL)
-    errExit("failed to init list\n");
+    /* create list_head and list_head->process with -1 pid value */
+    list_head *head =  ALLOC_NEW (list_head, 1, (long ) -1);
+
+    if (head == NULL)
+        errExit("failed to init list\n");
 
     head->next = head;
 
     return head;
+}
+
+/**
+ * @brief Init a chained hash table
+ * @param hash_table array of list_head *'s
+ * @return hash_table
+ *
+ * @remarks Hash table is a chained hash of singly-linked
+ * list_head *'s
+ *
+ */
+hash_t
+hash_t_init (hash_t hash_table, size_t pid_max)
+{
+    int i;
+    /* memset(hash, 0, sizeof(*hash)); */
+    for (i = 0; i < pid_max; i++) {
+        hash_table[i] = list_init();
+        hash_table[i]->next = NULL;
+    }
+
+    return hash_table;
 }
 
 list_head *
@@ -160,18 +200,7 @@ child_insert_at_head(list_head **children, list_head *child)
 list_head *
 list_add(list_head **list, list_head *node)
 {
-    if (*list == NULL) {
-      *list = list_init();
-      (*list)->process = node->process;
-      return *list;
-    }
-
-    /* check if already in list by pid */
     list_head *iter;
-
-    klist_for_each(iter, *list)
-        if (pid_matches(iter, list_head_pid(node)))
-            return iter;
 
 	iter = (*list)->next;
 	node->next = iter;
@@ -286,6 +315,7 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
 	return 1;
 }
 
+
 /**
  * @brief return *CHILD by pid or allocate space for new CHILD
  * @return *CHILD from task_list if exists else allocate new *CHILD.
@@ -300,6 +330,7 @@ list_head *
 proc_fetch_or_alloc(list_head *list, const pid_t pid)
 {
     list_head *p;
+
     klist_for_each(p, list) {
         if (pid_matches(p, pid)) {
             return p;
@@ -307,9 +338,7 @@ proc_fetch_or_alloc(list_head *list, const pid_t pid)
     }
 
 	/* no match found */
-	list_head *new_node = calloc(1, sizeof (*new_node));
-	new_node->process = calloc(1, sizeof (PROC));
-
+    list_head *new_node = ALLOC_NEW (list_head, 1, (long) -1);
 
 	if (!new_node) //|| !new_node->process)
 		errExit("Failed to allocate node\n");
@@ -328,36 +357,7 @@ get_path(const pid_t pid)
     return path;
 }
 
-/**
- * @brief Init for chained hash tables
- */
 
-/**
- * @brief Init a chained hash table
- * @param hash_table array of list_head *'s
- * @return hash_table
- *
- * @remarks Hash table is a chained hash of singly-linked
- * list_head *'s
- *
- */
-hash_t
-hash_init (hash_t hash_table)
-{
-    int i;
-    int pid_max = get_pid_max();
-
-    /*
-     * create singly linked list of list_head nodes
-     * for each hash bucket
-     */
-    for (i = 0; i < pid_max; i++) {
-        hash_table[i] = list_init();
-        hash_table[i]->next = NULL;
-    }
-
-    return hash_table;
-}
 
 /**
  *
@@ -376,7 +376,6 @@ hash_lookup (const hash_t hash_table, pid_t pid, PROC **data_ptr)
 
     for (iter = hash_table[key]; iter->next != NULL; iter = iter->next) {
             if (pid_matches(iter, pid)) {
-                printf("GOT MATCH");
                 *data_ptr = iter->process;
                 return 0;
             }
@@ -397,8 +396,9 @@ hash_add_process (hash_t hash_table, PROC const * const proc)
         return;
 
     /* insert at head of list */
-    list_head *node = calloc(1, sizeof(*node));
-    node->process = (PROC *) proc;
+    list_head *node = ALLOC_NEW (list_head, 1, (long) 1);
+    free(node->process);        /* free default zeroed process */
+    node->process = (PROC *) proc;  /* replace with args process */
 
     list_head *head = hash_table[key];
     node->next = head;
@@ -419,9 +419,8 @@ read_proc_dir_by_pid(const pid_t pid, list_head *list, hash_t hash_table)
         return;
 
 	if ((file = fopen(path, "r")) != NULL) {
-        list_head *selected_process = proc_fetch_or_alloc(list, pid);
-
-        PROC *proc = selected_process->process;
+        list_head *new_node = proc_fetch_or_alloc(list, pid);
+        PROC *proc = new_node->process;
 
         /* @TODO scan entire file once to store struct
          * instead of line by line */
@@ -487,20 +486,11 @@ assemble_buffer(list_head *list, hash_t hash_table)
     pid_t ppid;
     klist_for_each(p, list) {
         PROC *parent_ptr;
-        if (p == NULL)
         /* find parent node */
         ppid = p->process->ppid;
         /* matched parent element stored in parent_ptr */
         if (hash_lookup (hash_table, ppid, &parent_ptr) == 0) {
-            printf("matched %zu\n", (long) ppid);
-            /*
-             * @TODO leave nodes in circular buffer
-             *
-             * need a better way to build the process tree
-             *
-             */
             list_head *child = list_remove_and_return(list, p);
-            child->process->parent = parent_ptr;
             child_insert_at_head(&parent_ptr->children, child);
         }
     }
@@ -511,8 +501,11 @@ assemble_buffer(list_head *list, hash_t hash_table)
 int
 main(int argc, char *argv[])
 {
+    int pid_max = get_pid_max();
+
     hash_t hash_table;   /* hash_t is array of list_head *'s */
-    hash_table = hash_init(calloc(get_pid_max(), sizeof(list_head *)));
+    /* hash_table = hash_init(calloc(get_pid_max(), sizeof(list_head *))); */
+    hash_table = ALLOC_NEW (hash_t, pid_max, pid_max);
     if (!hash_table)
         errExit("Could not allocate hash table\n");
 
@@ -551,6 +544,7 @@ main(int argc, char *argv[])
 
     if ((hash_lookup(hash_table, 1, &init)) == -1)
         errExit("Could not locate init process\n");
+
     display_process(init);
 
 
