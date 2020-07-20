@@ -19,6 +19,8 @@
  *   clean up: strtol error handling
  *   get_pid_max : fall back for pre 2.6 Linux
  *   switch to gnome-docs
+ *   const correctness
+ *   use void *'s for holding address of lists
  */
 
 #include <unistd.h>
@@ -27,6 +29,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 #include <limits.h>
 #include <sys/stat.h>		/* for stat macros */
 #include "error_functions.h"
@@ -62,6 +65,8 @@
 #define pid_matches(list_head, tid)   (((list_head) && (list_head)->process && (list_head)->process->pid == (tid)) ? 1 : 0)
 
 #define list_is_tail(list, element) ((element)->next == NULL ? 1 : 0)
+
+#define ALLOC_NEW(T, ...) T ## _init(calloc(1, sizeof(T)), __VA_ARGS__)
 
 typedef struct _proc PROC;
 typedef struct _list_head list_head;
@@ -138,6 +143,21 @@ list_init() {
 }
 
 list_head *
+child_insert_at_head(list_head **children, list_head *child)
+{
+    if (*children == NULL) {
+        *children = child;
+        /* null child next since coming from base circular buffer */
+        child->next = NULL;
+        return child;
+    }
+
+    /* assume it is not in list already since unnique pids */
+    child->next = *children;
+    return child;
+}
+
+list_head *
 list_add(list_head **list, list_head *node)
 {
     if (*list == NULL) {
@@ -172,9 +192,22 @@ print_hash_list(const hash_t hash_table)
         printf("\n\n\nBUCKETS: \t %d\n", i);
 
         for (; list->next != NULL; list = list->next) {
-            printf("%s: pid: %zu ppid: %zu\n", list->process->name, (long) list->process->pid, (long) list->process->ppid);
+            printf("%s: pid: %zu ppid: %zu \t *=%p\n", list->process->name, (long) list->process->pid, (long) list->process->ppid, list->process);
             printf("|\n");
         }
+    }
+}
+
+void
+display_process(PROC *proc)
+{
+    printf("Process: %s \t pid: %zu\n", proc->name, (long) proc->pid);
+
+    list_head *child = proc->children;
+    while(child)
+    {
+        printf("CHILDREN: %s\t%zu\n", child->process->name, (long) child->process->pid);
+        child = child->next;
     }
 }
 
@@ -184,7 +217,7 @@ print_list(const list_head * list)
 	list_head *p, *c;
     PROC *par;
 	klist_for_each(p, list) {
-		printf("%s: %zu\n", p->process->name, (long) p->process->pid);
+		printf("%s: %zu  *=%p\n", p->process->name, (long) p->process->pid, p->process);
         printf("|\n");
 
 
@@ -207,7 +240,8 @@ print_list(const list_head * list)
  * @remark This does not free child and will return node regardless of it being
  * in the list (unlikely).
  */
-list_head *list_remove_and_return(list_head *list, list_head *node) {
+list_head *
+list_remove_and_return(list_head *list, list_head *node) {
   list_head *iter = list->next;
   list_head *prev = NULL;
 
@@ -263,7 +297,7 @@ str_starts_with(const char *restrict str, const char *restrict prefix)
  * @remarks Align memory or allocate enough space for all CHILD's at once?
  */
 list_head *
-proc_fetch_or_alloc(list_head *list, pid_t pid)
+proc_fetch_or_alloc(list_head *list, const pid_t pid)
 {
     list_head *p;
     klist_for_each(p, list) {
@@ -273,12 +307,12 @@ proc_fetch_or_alloc(list_head *list, pid_t pid)
     }
 
 	/* no match found */
-	list_head *new_node = malloc(sizeof (*new_node));
+	list_head *new_node = calloc(1, sizeof (*new_node));
 	new_node->process = calloc(1, sizeof (PROC));
 
 
 	if (!new_node) //|| !new_node->process)
-		errExit("Failed to malloc node\n");
+		errExit("Failed to allocate node\n");
 
 	/* insert node into chain */
     (void) list_add(&list, new_node);
@@ -286,7 +320,7 @@ proc_fetch_or_alloc(list_head *list, pid_t pid)
 }
 
 static char *
-get_path(pid_t pid)
+get_path(const pid_t pid)
 {
     /* @TODO size path */
 	static char path[BUFSIZ];
@@ -295,11 +329,19 @@ get_path(pid_t pid)
 }
 
 /**
- * @brief Init a chained hash table of * to list_head
- * @param [out] hash_table array of list_head *'s
- * @return 0 on success, -1 on error
+ * @brief Init for chained hash tables
  */
-int
+
+/**
+ * @brief Init a chained hash table
+ * @param hash_table array of list_head *'s
+ * @return hash_table
+ *
+ * @remarks Hash table is a chained hash of singly-linked
+ * list_head *'s
+ *
+ */
+hash_t
 hash_init (hash_t hash_table)
 {
     int i;
@@ -312,10 +354,9 @@ hash_init (hash_t hash_table)
     for (i = 0; i < pid_max; i++) {
         hash_table[i] = list_init();
         hash_table[i]->next = NULL;
-
     }
 
-    return 0;
+    return hash_table;
 }
 
 /**
@@ -328,7 +369,7 @@ hash_init (hash_t hash_table)
  */
 static
 int
-hash_lookup (hash_t hash_table, pid_t pid, list_head *data)
+hash_lookup (const hash_t hash_table, pid_t pid, PROC **data_ptr)
 {
     list_head *iter;
     int key = hash_pid(pid);
@@ -336,7 +377,7 @@ hash_lookup (hash_t hash_table, pid_t pid, list_head *data)
     for (iter = hash_table[key]; iter->next != NULL; iter = iter->next) {
             if (pid_matches(iter, pid)) {
                 printf("GOT MATCH");
-                data = iter;
+                *data_ptr = iter->process;
                 return 0;
             }
     }
@@ -347,12 +388,12 @@ hash_lookup (hash_t hash_table, pid_t pid, list_head *data)
 static void
 hash_add_process (hash_t hash_table, PROC const * const proc)
 {
-    list_head *data;
+    PROC **dummy = (void *) 0; /* NULL out since not used */
     int key = hash_pid ((proc)->pid);
 
 
     /* do nothing if h_table already has node (by pid) */
-    if (hash_lookup (hash_table, proc->pid, data) == 0)
+    if (hash_lookup (hash_table, proc->pid, dummy) == 0)
         return;
 
     /* insert at head of list */
@@ -366,7 +407,7 @@ hash_add_process (hash_t hash_table, PROC const * const proc)
 }
 
 static void
-read_proc_dir_by_pid(pid_t pid, list_head *list, hash_t hash_table)
+read_proc_dir_by_pid(const pid_t pid, list_head *list, hash_t hash_table)
 {
 	FILE *file;
 	char *path;
@@ -381,7 +422,11 @@ read_proc_dir_by_pid(pid_t pid, list_head *list, hash_t hash_table)
         list_head *selected_process = proc_fetch_or_alloc(list, pid);
 
         PROC *proc = selected_process->process;
+
+        /* @TODO scan entire file once to store struct
+         * instead of line by line */
 		while (fgets(buf, LINE_MAX, file)) {
+
 			if (buf[strlen(buf) - 1] == '\n')	/* replace fgets \n with \0 */
 				buf[strlen(buf) - 1] = '\0';
 
@@ -391,7 +436,6 @@ read_proc_dir_by_pid(pid_t pid, list_head *list, hash_t hash_table)
                 if (str_starts_with(buf, "Pid"))
                     sscanf(buf, "%*[^]0-9]%d", &proc->pid);
 
-                /* handle parent */
                 if (str_starts_with(buf, "PPid"))
                     sscanf(buf, "%*[^]0-9]%d", &proc->ppid);
 		}
@@ -406,44 +450,73 @@ read_proc_dir_by_pid(pid_t pid, list_head *list, hash_t hash_table)
  * @brief crawl PROC_BASE and create PROC entries
  */
 static void
-crawl_proc(list_head * list_head, hash_t hash_table)
-{
-	DIR *dirp;
-	struct dirent *de;
+crawl_proc_dir(list_head *list_head, hash_t hash_table) {
+    DIR *dirp;
+    struct dirent *de;
 
-	dirp = opendir(PROC_BASE);
-	if (dirp == NULL) {
-		errExit("opendir");
-	}
+    dirp = opendir(PROC_BASE);
+    if (dirp == NULL) {
+        errExit("opendir");
+    }
 
-	/* iterate over dirs in PROC_BASE */
-	for (;;) {
-		errno = 0;
-		pid_t pid;
+    /* iterate over dirs in PROC_BASE */
+    for (;;) {
+        errno = 0;
+        pid_t pid;
 
-		de = readdir(dirp);
-		if (de == NULL)	/* EOS */
-			break;
+        de = readdir(dirp);
+        if (de == NULL) /* EOS */
+            break;
 
-		pid = (pid_t) strtol(de->d_name, NULL, 10);
-		if (pid)
-			read_proc_dir_by_pid(pid, list_head, hash_table);
-	}
+        pid = (pid_t)strtol(de->d_name, NULL, 10);
+        if (pid)
+            read_proc_dir_by_pid(pid, list_head, hash_table);
+    }
 
-	closedir(dirp);
-
+    closedir(dirp);
 }
 
+/**
+ * @brief Assemble a pid tree
+ */
+static void
+assemble_buffer(list_head *list, hash_t hash_table)
+{
+    list_head *p;
+
+    pid_t ppid;
+    klist_for_each(p, list) {
+        PROC *parent_ptr;
+        if (p == NULL)
+        /* find parent node */
+        ppid = p->process->ppid;
+        /* matched parent element stored in parent_ptr */
+        if (hash_lookup (hash_table, ppid, &parent_ptr) == 0) {
+            printf("matched %zu\n", (long) ppid);
+            /*
+             * @TODO leave nodes in circular buffer
+             *
+             * need a better way to build the process tree
+             *
+             */
+            list_head *child = list_remove_and_return(list, p);
+            child->process->parent = parent_ptr;
+            child_insert_at_head(&parent_ptr->children, child);
+        }
+    }
+
+}
 
 
 int
 main(int argc, char *argv[])
 {
     hash_t hash_table;   /* hash_t is array of list_head *'s */
-    if ((hash_table = (hash_t) calloc(get_pid_max(), sizeof(list_head *))) == NULL)
+    hash_table = hash_init(calloc(get_pid_max(), sizeof(list_head *)));
+    if (!hash_table)
         errExit("Could not allocate hash table\n");
 
-    hash_init(hash_table);
+    PROC *init;
 
     printf("PID_MAX: %d\n", get_pid_max());
 
@@ -467,13 +540,22 @@ main(int argc, char *argv[])
 #endif
 
 	/* create circular list of all unique running pids */
-	crawl_proc(list_head, hash_table);
+    crawl_proc_dir(list_head, hash_table);
+    assemble_buffer(list_head, hash_table);
 
-    /* @TODO assemble pid relationships using buffer and hash_t */
 
 	/* free_list(list_head); */
+
 	/* print_list(list_head); */
-	print_hash_list(hash_table);
+	/* print_hash_list(hash_table); */
+
+    if ((hash_lookup(hash_table, 1, &init)) == -1)
+        errExit("Could not locate init process\n");
+    display_process(init);
+
+
+
+
 
 #ifdef ROOT_RUN
     /**

@@ -24,6 +24,9 @@ INDENT_FLAGS_KERNEL = -nbad -bap -nbc -bbo -hnl -br -brs -c33 -cd33 \
 $(basename $(EXEC)): $(SRC_FILES)
 	$(CC) $(CFLAGS) $(SRC_FILES) $@.c $(LDFLAGS) -o $(BIN_DIR)/$@ 
 
+preprocessor: $(SRC_FILES)
+	$(CC) $(CFLAGS) $(SRC_FILES) process_tree.c $(LDFLAGS) -E
+
 indent:
 	indent $(INDENT_FLAGS_KERNEL_ALT) $(EXEC)
 
