@@ -51,6 +51,7 @@
 #endif
 
 #define PROC_STATUS         "status"
+#define DEFAULT_PID         0       /* to store in init'd processes */
 
 /* see LKD p.30
    plist similar to kernel's task_list of task_struct(s)
@@ -134,7 +135,6 @@ hash_pid (pid_t pid)
 PROC *
 PROC_init (PROC *proc, const pid_t pid)
 {
-    printf("allocated proc for %zu\n", (long) pid);
     proc->pid = pid;
     return proc;
 }
@@ -150,7 +150,7 @@ list_head_init (list_head *list, const pid_t pid)
 list_head *
 list_init() {
     /* create list_head and list_head->process with -1 pid value */
-    list_head *head =  ALLOC_NEW (list_head, 1, (long ) -1);
+    list_head *head =  ALLOC_NEW (list_head, 1, DEFAULT_PID);
 
     if (head == NULL)
         errExit("failed to init list\n");
@@ -173,9 +173,10 @@ hash_t
 hash_t_init (hash_t hash_table, size_t pid_max)
 {
     int i;
-    /* memset(hash, 0, sizeof(*hash)); */
+
+    /* @TODO allocate on write to avoid unnecessary buckets */
     for (i = 0; i < pid_max; i++) {
-        hash_table[i] = list_init();
+        hash_table[i] = ALLOC_NEW (list_head, 1, DEFAULT_PID);
         hash_table[i]->next = NULL;
     }
 
@@ -338,7 +339,7 @@ proc_fetch_or_alloc(list_head *list, const pid_t pid)
     }
 
 	/* no match found */
-    list_head *new_node = ALLOC_NEW (list_head, 1, (long) -1);
+    list_head *new_node = ALLOC_NEW (list_head, 1, DEFAULT_PID);
 
 	if (!new_node) //|| !new_node->process)
 		errExit("Failed to allocate node\n");
@@ -396,7 +397,7 @@ hash_add_process (hash_t hash_table, PROC const * const proc)
         return;
 
     /* insert at head of list */
-    list_head *node = ALLOC_NEW (list_head, 1, (long) 1);
+    list_head *node = ALLOC_NEW (list_head, 1, DEFAULT_PID);
     free(node->process);        /* free default zeroed process */
     node->process = (PROC *) proc;  /* replace with args process */
 
