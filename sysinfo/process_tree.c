@@ -183,19 +183,20 @@ hash_t_init (hash_t hash_table, size_t pid_max)
     return hash_table;
 }
 
-list_head *
+list_head **
 child_insert_at_head(list_head **children, list_head *child)
 {
     if (*children == NULL) {
         *children = child;
         /* null child next since coming from base circular buffer */
         child->next = NULL;
-        return child;
+        return children;
     }
 
-    /* assume it is not in list already since unnique pids */
+    /* assume it is not in list already since unique pids */
     child->next = *children;
-    return child;
+    *children = child;
+    return children;
 }
 
 list_head *
@@ -279,6 +280,7 @@ list_remove_and_return(list_head *list, list_head *node) {
     prev = iter;
     iter = iter->next;
     if (pid_matches(node, list_head_pid(iter))) {
+        printf("got match");
 
       /* remove node from list (don't free) and return it */
       prev->next = iter->next;
@@ -331,6 +333,10 @@ list_head *
 proc_fetch_or_alloc(list_head *list, const pid_t pid)
 {
     list_head *p;
+
+    if (list->process->pid == 0) { /* first allocation */
+        return list;
+    }
 
     klist_for_each(p, list) {
         if (pid_matches(p, pid)) {
@@ -482,18 +488,29 @@ crawl_proc_dir(list_head *list_head, hash_t hash_table) {
 static void
 assemble_buffer(list_head *list, hash_t hash_table)
 {
-    list_head *p;
+    list_head *prev = list;
+    list_head *iter = list->next;
 
     pid_t ppid;
-    klist_for_each(p, list) {
+
+    for (; iter != list; prev = iter, iter = iter->next) {
         PROC *parent_ptr;
+
         /* find parent node */
-        ppid = p->process->ppid;
+        ppid = iter->process->ppid;
+        /* check if ppid = 0, no parent so init process */
+        if (ppid == 0)
+            continue;
+
         /* matched parent element stored in parent_ptr */
         if (hash_lookup (hash_table, ppid, &parent_ptr) == 0) {
-            list_head *child = list_remove_and_return(list, p);
-            child_insert_at_head(&parent_ptr->children, child);
+
+            list_head *next = iter->next;   /* store next element */
+            list_head *child = list_remove_and_return(list, iter); /* remove this element from buffer */
+            child_insert_at_head(&parent_ptr->children, child); /* and put into parent's children */
+            iter = next;                                       /* point iterator to next element */
         }
+
     }
 
 }
