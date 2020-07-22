@@ -45,14 +45,16 @@ int main(int argc, char *argv[])
 
     /* open our FIFO, read and display response */
 
-    if ( (clientFd = open(clientFifo, O_RDONLY)) == -1)
+    clientFd = open(clientFifo, O_RDONLY);
+    if (clientFd == -1)
         errExit("open %s", clientFifo);
+
 
     if (read(clientFd, &resp, sizeof(struct response))
             != sizeof(struct response))
         fatal("Cannot read response from server");
 
-    printf("%d\n", resp.seqNum);
+    printf("resp.seqNum: %d\n", resp.seqNum);
 
     exit(EXIT_SUCCESS);
 }
