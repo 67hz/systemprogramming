@@ -230,16 +230,31 @@ print_hash_list(const hash_t hash_table)
 }
 
 void
+display_child_process(list_head *child)
+{
+    while (child) {
+    printf("\t: %s\t%zu\n", child->process->name, (long) child->process->pid);
+    if (child->process->children)                               /* children */
+        display_child_process(child->process->children);
+    if (child->next) {                                            /* siblings */
+        printf("-->");
+        if (child->process->children)                               /* children */
+            display_child_process(child->process->children);
+        display_child_process(child->next);
+    }
+
+}
+
+void
 display_process(PROC *proc)
 {
     printf("Process: %s \t pid: %zu\n", proc->name, (long) proc->pid);
 
     list_head *child = proc->children;
-    while(child)
-    {
-        printf("CHILDREN: %s\t%zu\n", child->process->name, (long) child->process->pid);
-        child = child->next;
+    if (child) {
+        display_child_process(child);
     }
+
 }
 
 void
@@ -252,12 +267,11 @@ print_list(const list_head * list)
         printf("|\n");
 
 
-        list_head *children = p->process && p->process->children ? p->process->children : NULL;
+        list_head *children = p->process->children;
         while (children) {
             klist_for_each(c, children) {
                 printf("|-%s-|%zu\n", c->process->name, (long) c->process->pid);
             }
-            children = c->process && c->process->children ? c->process->children : NULL;
             printf("|\n");
         }
 	}
@@ -507,8 +521,10 @@ assemble_buffer(list_head *list, hash_t hash_table)
 
             list_head *next = iter->next;   /* store next element */
             list_head *child = list_remove_and_return(list, iter); /* remove this element from buffer */
+            child->process->parent = parent_ptr;
             child_insert_at_head(&parent_ptr->children, child); /* and put into parent's children */
             iter = next;                                       /* point iterator to next element */
+
         }
 
     }
@@ -519,7 +535,13 @@ assemble_buffer(list_head *list, hash_t hash_table)
 int
 main(int argc, char *argv[])
 {
+    pid_t selected_pid = 0;
     int pid_max = get_pid_max();
+    if (argc > 1) {
+        selected_pid = atoi(argv[1]);
+        printf("pid: %zu\n", (long) selected_pid);
+    }
+
 
     hash_t hash_table;   /* hash_t is array of list_head *'s */
     /* hash_table = hash_init(calloc(get_pid_max(), sizeof(list_head *))); */
@@ -557,11 +579,17 @@ main(int argc, char *argv[])
 
 	/* free_list(list_head); */
 
-	/* print_list(list_head); */
+
 	/* print_hash_list(hash_table); */
 
+    if (selected_pid) {
+        if ((hash_lookup(hash_table, selected_pid, &init)) == -1)
+            errExit("Could not locate pid: %zu\n", (long) selected_pid);
+    } else  {
     if ((hash_lookup(hash_table, 1, &init)) == -1)
         errExit("Could not locate init process\n");
+    }
+	/* print_list(list_head); */
 
     display_process(init);
 
