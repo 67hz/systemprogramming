@@ -183,20 +183,19 @@ hash_t_init (hash_t hash_table, size_t pid_max)
     return hash_table;
 }
 
-list_head **
+void
 child_insert_at_head(list_head **children, list_head *child)
 {
     if (*children == NULL) {
         *children = child;
         /* null child next since coming from base circular buffer */
         child->next = NULL;
-        return children;
+        return;
     }
 
     /* assume it is not in list already since unique pids */
     child->next = *children;
     *children = child;
-    return children;
 }
 
 list_head *
@@ -232,14 +231,10 @@ print_hash_list(const hash_t hash_table)
 void
 display_child_process(list_head *child)
 {
-    while (child) {
-    printf("\t: %s\t%zu\n", child->process->name, (long) child->process->pid);
-    if (child->process->children)                               /* children */
+    if (child) {
+        printf("\t: %s\t%zu\n", child->process->name, (long) child->process->pid);
+
         display_child_process(child->process->children);
-    if (child->next) {                                            /* siblings */
-        printf("-->");
-        if (child->process->children)                               /* children */
-            display_child_process(child->process->children);
         display_child_process(child->next);
     }
 
