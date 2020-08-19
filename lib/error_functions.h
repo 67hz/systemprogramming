@@ -44,7 +44,7 @@ void err_exit(const char *format, ...) NORETURN;
 
 /**
  * same as err_exit but print errno (EN) - will be useful in programs that
- * emply the POSIX threads API - POSIX return non-negative errno and 0
+ * employ the POSIX threads API - POSIX return non-negative errno and 0
  * on success.
  */
 void errExitEN(int errnum, const char *format, ...) NORETURN;
